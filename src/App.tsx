@@ -20,6 +20,63 @@ export default function App() {
 
   const t = translations[language];
 
+  const [isSecretMode, setIsSecretMode] = useState(false);
+  const [glitchCount, setGlitchCount] = useState(0);
+  const [glitchWordIndex, setGlitchWordIndex] = useState(-1);
+  const glitchWords = ["Your", "Heart", "In The", "System", "Your", "Head", "Full", "Of", "SYSTEM"];
+  const [isDeadWeb, setIsDeadWeb] = useState(false);
+
+  const [keySequence, setKeySequence] = useState<string[]>([]);
+  const secretCode = [
+    'w', 'a', 's', 'd', 
+    'ArrowUp', 'ArrowUp', 
+    'ArrowDown', 'ArrowDown', 
+    'ArrowLeft', 'ArrowRight', 
+    'ArrowLeft', 'ArrowRight'
+  ];
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const newSequence = [...keySequence, e.key];
+      
+      if (newSequence.length > secretCode.length) {
+        newSequence.shift();
+      }
+      
+      setKeySequence(newSequence);
+
+      if (newSequence.join(',') === secretCode.join(',')) {
+        setKeySequence([]);
+        if (view === 'dashboard' && user) {
+          const nextCount = glitchCount + 1;
+          setGlitchCount(nextCount);
+          
+          if (nextCount > 13) {
+            setIsDeadWeb(true);
+            return;
+          }
+
+          // Trigger word glitch
+          setGlitchWordIndex(0);
+          const interval = setInterval(() => {
+            setGlitchWordIndex(prev => {
+              if (prev >= glitchWords.length - 1) {
+                clearInterval(interval);
+                return -1;
+              }
+              return prev + 1;
+            });
+          }, 150);
+        } else {
+          setIsSecretMode(true);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [keySequence, view, user, glitchCount]);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser: FirebaseUser | null) => {
       if (firebaseUser) {
@@ -91,7 +148,20 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen relative overflow-x-hidden flex flex-col bg-background selection:bg-primary/30">
+    <div 
+      className={`min-h-screen relative overflow-x-hidden flex flex-col bg-background selection:bg-primary/30 transition-colors duration-1000 ${
+        glitchCount > 0 ? 'grayscale !brightness-[0.4] !contrast-125' : ''
+      } ${glitchCount > 8 ? 'invert hue-rotate-180 brightness-[0.2]' : ''}`}
+      style={{
+        filter: glitchCount > 0 ? `grayscale(${Math.min(glitchCount * 10, 100)}%) brightness(${Math.max(1 - glitchCount * 0.05, 0.2)})` : '',
+        backgroundColor: glitchCount > 0 ? (glitchCount % 2 === 0 ? '#0a0000' : '#050000') : ''
+      }}
+    >
+      {glitchCount > 5 && (
+        <div className="fixed inset-0 z-[100] pointer-events-none mix-blend-overlay">
+          <div className="absolute inset-0 bg-red-900/10 animate-pulse"></div>
+        </div>
+      )}
       <Navbar 
         theme={theme} 
         toggleTheme={toggleTheme} 
@@ -133,6 +203,92 @@ export default function App() {
         <div className="absolute top-[-10%] -left-[10%] w-[50%] h-[50%] rounded-full bg-primary/5 blur-[120px]"></div>
         <div className="absolute bottom-[-10%] -right-[10%] w-[50%] h-[50%] rounded-full bg-primary/5 blur-[120px]"></div>
       </div>
+
+      {/* Glitch Word Overlay */}
+      <AnimatePresence>
+        {glitchWordIndex !== -1 && (
+          <motion.div
+            initial={{ opacity: 1 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[11000] bg-red-600 flex items-center justify-center overflow-hidden"
+          >
+            <motion.div
+              animate={{ 
+                x: [0, -10, 10, -5, 5, 0],
+                y: [0, 5, -5, 2, -2, 0],
+              }}
+              transition={{ repeat: Infinity, duration: 0.1 }}
+              className="text-8xl md:text-[14rem] font-black text-black uppercase italic tracking-tighter"
+            >
+              {glitchWords[glitchWordIndex]}
+            </motion.div>
+            
+            {/* Background noise scanlines */}
+            <div className="absolute inset-0 opacity-20 pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,100,0.06))] bg-[length:100%_2px,3px_100%]"></div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Secret Mode Overlay */}
+      <AnimatePresence>
+        {isSecretMode && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[10000] bg-white flex flex-col items-center justify-center p-6"
+          >
+            <motion.h1 
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.5, duration: 1 }}
+              className="text-4xl md:text-6xl font-bold text-black text-center"
+            >
+              นายกดทำไมง่ะ
+            </motion.h1>
+            <motion.button
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 2 }}
+              onClick={() => setIsSecretMode(false)}
+              className="mt-12 px-6 py-2 border border-black/20 rounded-full text-black/40 hover:text-black hover:border-black transition-all text-sm font-medium"
+            >
+              กลับไปหน้าปกติก็ได้...
+            </motion.button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Dead Web State */}
+      <AnimatePresence>
+        {isDeadWeb && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.1 }}
+            className="fixed inset-0 z-[12000] bg-black flex flex-col items-center justify-center font-mono p-12 text-white"
+          >
+            <div className="max-w-2xl w-full">
+              <div className="bg-red-600 text-white px-2 py-1 inline-block mb-8 font-bold">FATAL ERROR</div>
+              <h1 className="text-4xl md:text-5xl font-bold mb-6 tracking-tighter">
+                This Website Delete By ******
+              </h1>
+              <div className="space-y-2 opacity-50 text-xs">
+                <p>CORE_SEGMENT_FAULT: 0xDEADBEEF</p>
+                <p>MEMORY_LEAK_IN_LOGIC_GATE</p>
+                <p>TRACES_OF_HUMAN_INTERVENTION_DETECTED</p>
+                <p>SYSTEM_PURGE_COMPLETE</p>
+              </div>
+              <motion.div 
+                animate={{ opacity: [0, 1, 0] }}
+                transition={{ repeat: Infinity, duration: 0.8 }}
+                className="mt-12 w-4 h-8 bg-white"
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Theme Transition Flash Overlay */}
       <AnimatePresence>
